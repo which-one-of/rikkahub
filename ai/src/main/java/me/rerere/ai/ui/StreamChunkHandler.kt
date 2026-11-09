@@ -386,26 +386,9 @@ private fun UIMessage.appendMessage(delta: UIMessage): UIMessage {
             // 这里每张图片都是独立的完整图片，不能拼接 URL 或补 data 前缀。
             is UIMessagePart.Image -> acc + deltaPart
 
-            is UIMessagePart.Reasoning -> {
-                if (deltaPart.reasoning.isEmpty() && deltaPart.metadata == null) {
-                    acc
-                } else {
-                    val lastPart = acc.lastOrNull()
-                    if (lastPart is UIMessagePart.Reasoning &&
-                        lastPart.reasoningType == deltaPart.reasoningType
-                    ) {
-                        acc.dropLast(1) + UIMessagePart.Reasoning(
-                            reasoning = lastPart.reasoning + deltaPart.reasoning,
-                            createdAt = lastPart.createdAt,
-                            finishedAt = null,
-                            metadata = deltaPart.metadata ?: lastPart.metadata,
-                            reasoningType = lastPart.reasoningType,
-                        )
-                    } else {
-                        acc + deltaPart
-                    }
-                }
-            }
+            // A non-streaming result contains complete blocks, not deltas. Preserve their
+            // boundaries and metadata; streaming fragments are accumulated by block ID above.
+            is UIMessagePart.Reasoning -> acc + deltaPart
 
             is UIMessagePart.Tool -> {
                 if (deltaPart.toolCallId.isBlank()) {

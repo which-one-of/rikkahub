@@ -755,9 +755,15 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
         }
 
         is UIMessagePart.Reasoning -> buildJsonObject {
-            put("type", "thinking")
-            put("thinking", reasoning)
-            metadataAs<ClaudeReasoningMetadata>()?.signature?.let { put("signature", it) }
+            val claudeMetadata = metadataAs<ClaudeReasoningMetadata>()
+            if (claudeMetadata?.redactedData != null) {
+                put("type", "redacted_thinking")
+                put("data", claudeMetadata.redactedData)
+            } else {
+                put("type", "thinking")
+                put("thinking", reasoning)
+                claudeMetadata?.signature?.let { put("signature", it) }
+            }
         }
 
         else -> null
@@ -811,8 +817,12 @@ class ClaudeProvider(private val client: OkHttpClient, context: Context? = null)
                 }
 
                 "redacted_thinking" -> {
-                    val data = block["data"]?.jsonPrimitiveOrNull?.contentOrNull
-                    println(data)
+                    parts.add(UIMessagePart.Reasoning(
+                        reasoning = "",
+                        metadata = ClaudeReasoningMetadata(
+                            redactedData = block.getValue("data").jsonPrimitive.content,
+                        ).toMetadata(),
+                    ))
                 }
 
                 "tool_use" -> {

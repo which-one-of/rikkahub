@@ -56,12 +56,20 @@ internal class ClaudeStreamDecoder : StreamChunkDecoder {
                     "thinking" -> contentBlock["signature"]?.jsonPrimitive?.contentOrNull?.let {
                         ClaudeReasoningMetadata(signature = it).toMetadata()
                     }
+                    "redacted_thinking" -> ClaudeReasoningMetadata(
+                        redactedData = contentBlock.getValue("data").jsonPrimitive.content,
+                    ).toMetadata()
                     else -> null
                 }
                 blocks[index] = ClaudeStreamBlock(kind, blockId, metadata)
                 when (kind) {
                     "text" -> add(StreamChunk.TextStart(blockId))
-                    "thinking", "redacted_thinking" -> add(StreamChunk.ReasoningStart(blockId, metadata))
+                    "thinking", "redacted_thinking" -> {
+                        add(StreamChunk.ReasoningStart(blockId, metadata))
+                        contentBlock["thinking"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotEmpty() }?.let {
+                            add(StreamChunk.ReasoningDelta(blockId, it, metadata))
+                        }
+                    }
                     "tool_use" -> {
                         add(StreamChunk.ToolCallStart(
                             id = blockId,
@@ -121,7 +129,8 @@ internal class ClaudeStreamDecoder : StreamChunkDecoder {
                     ))
                     "signature_delta" -> {
                         val metadata = delta["signature"]?.jsonPrimitive?.contentOrNull?.let {
-                            ClaudeReasoningMetadata(signature = it).toMetadata()
+                            val previous = block.metadata?.get("signature")?.jsonPrimitive?.contentOrNull.orEmpty()
+                            ClaudeReasoningMetadata(signature = previous + it).toMetadata()
                         }
                         blocks[index] = block.copy(metadata = metadata ?: block.metadata)
                         add(StreamChunk.ReasoningDelta(block.id, "", metadata))
